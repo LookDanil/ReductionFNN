@@ -738,8 +738,57 @@ class MainWindow(QMainWindow):
         self.log_dialog.raise_()
 
     # ==========================================
-    # СОХРАНЕНИЕ / ЗАГРУЗКА МОДЕЛИ
+    # СОХРАНЕНИЕ / ЗАГРУЗКА МОДЕЛИ (С ГРАФИКАМИ И ЛОГАМИ)
     # ==========================================
+    
+    def _capture_all_plots_data(self):
+        """Собирает данные всех графиков со всех вкладок"""
+        plots_data = {}
+        
+        # Этап 1
+        if hasattr(self, 'visualization_panel'):
+            plots_data['stage1'] = self.visualization_panel.get_plot_data()
+        
+        # Этап 2
+        if hasattr(self, 'visualization_panel_stage2'):
+            plots_data['stage2'] = self.visualization_panel_stage2.get_plot_data()
+        
+        # Этап 3
+        if hasattr(self, 'visualization_panel_stage3'):
+            plots_data['stage3'] = self.visualization_panel_stage3.get_plot_data()
+        
+        return plots_data
+
+    def _restore_all_plots_from_data(self, plots_data):
+        """Восстанавливает все графики из сохраненных данных"""
+        if not plots_data:
+            return
+        
+        # Этап 1
+        if 'stage1' in plots_data and hasattr(self, 'visualization_panel'):
+            self.visualization_panel.restore_plot_data(plots_data['stage1'])
+        
+        # Этап 2
+        if 'stage2' in plots_data and hasattr(self, 'visualization_panel_stage2'):
+            self.visualization_panel_stage2.restore_plot_data(plots_data['stage2'])
+        
+        # Этап 3
+        if 'stage3' in plots_data and hasattr(self, 'visualization_panel_stage3'):
+            self.visualization_panel_stage3.restore_plot_data(plots_data['stage3'])
+
+    def _restore_logs(self, logs):
+        """Восстанавливает логи в интерфейсе"""
+        if not logs:
+            return
+        
+        self._log_buffer = logs
+        
+        # Если диалог логов открыт, обновить его содержимое
+        if self.log_dialog and self.log_dialog.isVisible():
+            self.log_dialog.log_text.clear()
+            for msg in self._log_buffer:
+                self.log_dialog.log_text.append(msg)
+
     def _save_model(self):
         if self.fnn_model is None:
             QMessageBox.warning(self, "Предупреждение", "Нет обученной модели.")
@@ -767,6 +816,10 @@ class MainWindow(QMainWindow):
                 'stage': stage,
                 'class_names': self.class_names,
                 'feature_names': self.feature_names,
+                
+                # Сохраняем графики и логи
+                'plots_data': self._capture_all_plots_data(),
+                'logs': self._log_buffer.copy(),
             }
 
             if self.stage1_results:
@@ -776,7 +829,7 @@ class MainWindow(QMainWindow):
                 data['y_test'] = self.stage1_results.get('y_test')
                 data['gradations'] = self.stage1_results.get('gradations')
                 data['rules_count'] = self.stage1_results.get('rules_count')
-                data['active_antecedents'] = self.stage1_results.get('active_antecedents')
+                data['active_antecedents'] = self.stage1_results.get('antecedents_total')
                 data['train_accuracy'] = self.stage1_results.get('train_accuracy')
                 data['test_accuracy'] = self.stage1_results.get('test_accuracy')
 
@@ -797,7 +850,8 @@ class MainWindow(QMainWindow):
 
             stage_names = {1: "Этап 1 (Преднастройка)", 2: "Этап 2 (Редукция)", 3: "Этап 3 (Обучение)"}
             QMessageBox.information(self, "Сохранено",
-                f"Модель сохранена ({stage_names[stage]})\nФайл: {file_path}")
+                f"Модель сохранена ({stage_names[stage]})\nФайл: {file_path}\n"
+                f"Сохранены графики и логи")
         except Exception as e:
             QMessageBox.critical(self, "Ошибка", f"Не удалось сохранить:\n{str(e)}")
 
@@ -829,7 +883,7 @@ class MainWindow(QMainWindow):
                 'gradations': data['gradations'],
                 'membership_funcs': self.fnn_model.membership_funcs,
                 'rules_count': data['rules_count'],
-                'antecedents_total': data.get('antecedents_total', 0),
+                'antecedents_total': data.get('active_antecedents', 0),
                 'train_accuracy': data['train_accuracy'],
                 'test_accuracy': data['test_accuracy'],
                 'fitness': data['train_accuracy'] / 100 if data['train_accuracy'] else 0,
@@ -893,21 +947,29 @@ class MainWindow(QMainWindow):
             for btn in self.info_buttons:
                 btn.setEnabled(True)
 
+            # Восстановление графиков и логов
+            if 'plots_data' in data:
+                self._restore_all_plots_from_data(data['plots_data'])
+            
+            if 'logs' in data:
+                self._restore_logs(data['logs'])
+
             stage_names = {1: "Этап 1 (Преднастройка)", 2: "Этап 2 (Редукция)", 3: "Этап 3 (Обучение)"}
             QMessageBox.information(self, "Загружено",
                 f"Модель загружена ({stage_names[stage]})\n"
                 f"Градации: {data['gradations']}\n"
                 f"Правил: {data['rules_count']}\n"
                 f"Антецедентов: {antecedents_stage1}\n"
-                f"Точность TRAIN: {data['train_accuracy']:.2f}%")
+                f"Точность TRAIN: {data['train_accuracy']:.2f}%\n"
+                f"Графики и логи восстановлены")
 
-            self.statusbar.showMessage(f"Модель загружена ({stage_names[stage]})")
+            self.statusbar.showMessage(f"Модель загружена ({stage_names[stage]}) | Графики и логи восстановлены")
 
         except Exception as e:
             QMessageBox.critical(self, "Ошибка", f"Не удалось загрузить:\n{str(e)}")
 
     def _show_about(self):
-        QMessageBox.about(self, "О программе", "Нейронечеткая редуцированная модель\nВерсия 1.0")
+        QMessageBox.about(self, "О программе", "Нейронечеткая редуцированная модель\nВерсия 1.0\n\nПоддерживает сохранение и восстановление графиков и логов")
 
 
 def main():

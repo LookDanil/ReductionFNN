@@ -74,3 +74,30 @@ class VisualizationPanel(QGroupBox):
         self.test_gens = []
         self.test_values = []
         self._init_plot()
+        
+    def get_plot_data(self):
+        """Возвращает данные графика для сохранения"""
+        return {
+            'train_generations': self.train_gens.copy(),
+            'train_values': self.train_values.copy(),
+            'test_generations': self.test_gens.copy(),
+            'test_values': self.test_values.copy()
+        }
+
+    def restore_plot_data(self, plot_data):
+        """Восстанавливает график из сохраненных данных"""
+        if not plot_data:
+            return
+        
+        # Очистить текущий график
+        self.reset()
+        
+        # Восстановить данные
+        self.train_gens = plot_data.get('train_generations', [])
+        self.train_values = plot_data.get('train_values', [])
+        self.test_gens = plot_data.get('test_generations', [])
+        self.test_values = plot_data.get('test_values', [])
+        
+        # Перерисовать график
+        if self.train_gens or self.test_gens:
+            self._redraw()
